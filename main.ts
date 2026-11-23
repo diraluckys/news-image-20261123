@@ -1,46 +1,42 @@
-// News-image entry for Monday 23 November 2026. Node 22, standard library
-// only. The front page itself is the entry.png committed next to this file;
-// this program's only job is to place that exact file at
-// /output/entry.png (or $MAKEFUN_OUTPUT_DIR/entry.png outside the grader)
-// so the judged bytes are always the reviewed ones.
-//
-// The grader runs the program twice and requires identical bytes both
-// times, so nothing here depends on the clock, the network, or randomness:
-// the file is read once, written once, and the written copy is hashed and
-// compared against what was read before the program is allowed to finish.
+// News-image entry: "The World in One Page - 35 Stories" (Monday 23 Nov 2026).
+// Node 22, standard library only. The newspaper front page is committed as
+// entry.png next to this file; this program copies that exact file to the
+// output directory, so the bytes the grader sees are the bytes Win reviewed
+// and approved. It does no drawing, no fetching and no random work: read the
+// file, check it really is a PNG, write it out, and prove the copy matches
+// the original byte for byte before exiting.
 
 import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
-const sourcePath = new URL('./entry.png', import.meta.url);
+const PNG_MAGIC = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
-if (!existsSync(sourcePath)) {
-  throw new Error('entry.png is missing from this repository');
+function sha256(bytes: Buffer): string {
+  return createHash('sha256').update(bytes).digest('hex');
 }
 
-const image = readFileSync(sourcePath);
-
-// A PNG always starts with the same eight signature bytes; refuse a
-// committed file that is not a PNG at all instead of handing the grader
-// something it would reject.
-const pngSignature = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
-if (image.length < pngSignature.length || !image.subarray(0, 8).equals(pngSignature)) {
-  throw new Error('entry.png is not a valid PNG file');
+function fail(message: string): never {
+  throw new Error(message);
 }
 
-if (!existsSync(outDir)) {
-  mkdirSync(outDir, { recursive: true });
+const here = dirname(fileURLToPath(import.meta.url));
+const source = join(here, 'entry.png');
+if (!existsSync(source)) fail('entry.png is missing from this repository');
+
+const image = readFileSync(source);
+if (image.length < PNG_MAGIC.length || !image.subarray(0, PNG_MAGIC.length).equals(PNG_MAGIC)) {
+  fail('entry.png is not a valid PNG file');
 }
 
-const targetPath = join(outDir, 'entry.png');
-writeFileSync(targetPath, image);
+const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
+mkdirSync(outDir, { recursive: true });
 
-// The graded image must be byte-for-byte the committed file, so hash the
-// copy that was just written and refuse to finish if it differs at all.
-const writtenHash = createHash('sha256').update(readFileSync(targetPath)).digest('hex');
-const sourceHash = createHash('sha256').update(image).digest('hex');
-if (writtenHash !== sourceHash) {
-  throw new Error('written entry.png does not match the committed file');
+const target = join(outDir, 'entry.png');
+writeFileSync(target, image);
+
+const copied = readFileSync(target);
+if (sha256(copied) !== sha256(image)) {
+  fail('the written entry.png does not match the committed file');
 }
